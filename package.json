@@ -14,12 +14,15 @@
     "googleapis": "^150.0.0",
     "libphonenumber-js": "^1.13.13",
     "next": "^15.5.0",
+    "pdf-parse": "^1.1.1",
+    "pdfkit": "^0.17.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/pdfkit": "^0.14.0",
     "@types/react": "^19.1.0",
     "typescript": "^5.9.0"
   }

@@ -49,10 +49,10 @@ export async function POST(req: NextRequest) {
   for (const msg of mensajes) {
     const texto = msg.text?.body?.trim().toLowerCase() ?? "";
     const esPermitido = !permitidos.length || permitidos.includes(msg.from);
-    if (esPermitido && texto.includes("verificar expensas")) {
+    if (esPermitido && texto.includes("verificar expensas") && phoneNumberId) {
       paraExpensas = true;
       // Meta exige responder rápido; el trabajo pesado corre después de la respuesta.
-      after(() => verificarExpensas(msg.from, phoneNumberId));
+      after(() => verificarExpensas(phoneNumberId, msg.from));
     }
   }
 
