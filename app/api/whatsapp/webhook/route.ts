@@ -37,7 +37,10 @@ export async function POST(req: NextRequest) {
   }
 
   const data = JSON.parse(cuerpo);
-  const mensajes: MensajeEntrante[] = data?.entry?.[0]?.changes?.[0]?.value?.messages ?? [];
+  const value = data?.entry?.[0]?.changes?.[0]?.value;
+  const mensajes: MensajeEntrante[] = value?.messages ?? [];
+  // Número del bot que recibió el mensaje: se responde desde ese mismo.
+  const phoneNumberId: string | undefined = value?.metadata?.phone_number_id;
   const permitidos = (process.env.WHATSAPP_ALLOWED_NUMBERS ?? "").split(",").map((n) => n.trim()).filter(Boolean);
 
   // Sin mensajes (ej. actualizaciones de estado) o nada que matchee "verificar
@@ -49,7 +52,7 @@ export async function POST(req: NextRequest) {
     if (esPermitido && texto.includes("verificar expensas")) {
       paraExpensas = true;
       // Meta exige responder rápido; el trabajo pesado corre después de la respuesta.
-      after(() => verificarExpensas(msg.from));
+      after(() => verificarExpensas(msg.from, phoneNumberId));
     }
   }
 
