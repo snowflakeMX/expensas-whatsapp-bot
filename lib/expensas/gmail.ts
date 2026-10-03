@@ -1,0 +1,51 @@
+import type { gmail_v1 } from "googleapis";
+import { gmail } from "@/lib/google/cliente";
+import { env } from "@/lib/env";
+
+export type MailExpensas = {
+  asunto: string;
+  fecha: string;
+  nombrePdf: string;
+  pdf: Buffer;
+};
+
+// Busca recursivamente la primera parte del mail que sea un PDF adjunto.
+function buscarPdf(parte: gmail_v1.Schema$MessagePart | undefined): gmail_v1.Schema$MessagePart | undefined {
+  if (!parte) return undefined;
+  const esPdf = parte.mimeType === "application/pdf" || parte.filename?.toLowerCase().endsWith(".pdf");
+  if (esPdf && parte.body?.attachmentId) return parte;
+  for (const hija of parte.parts ?? []) {
+    const encontrada = buscarPdf(hija);
+    if (encontrada) return encontrada;
+  }
+  return undefined;
+}
+
+// Último mail que matchea EXPENSAS_GMAIL_QUERY y trae un PDF adjunto.
+export async function buscarUltimoMailExpensas(): Promise<MailExpensas | null> {
+  const api = gmail();
+  const { data } = await api.users.messages.list({ userId: "me", q: env("EXPENSAS_GMAIL_QUERY"), maxResults: 5 });
+
+  for (const { id } of data.messages ?? []) {
+    if (!id) continue;
+    const { data: mensaje } = await api.users.messages.get({ userId: "me", id, format: "full" });
+    const parte = buscarPdf(mensaje.payload);
+    if (!parte?.body?.attachmentId) continue;
+
+    const { data: adjunto } = await api.users.messages.attachments.get({
+      userId: "me",
+      messageId: id,
+      id: parte.body.attachmentId,
+    });
+    const header = (nombre: string) =>
+      mensaje.payload?.headers?.find((h) => h.name?.toLowerCase() === nombre)?.value ?? "";
+
+    return {
+      asunto: header("subject"),
+      fecha: header("date"),
+      nombrePdf: parte.filename || "expensas.pdf",
+      pdf: Buffer.from(adjunto.data ?? "", "base64url"),
+    };
+  }
+  return null;
+}
