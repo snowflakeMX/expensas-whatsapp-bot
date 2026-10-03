@@ -3,10 +3,6 @@ import { env } from "@/lib/env";
 import { firmaValida } from "@/lib/whatsapp/firma";
 import { verificarExpensas } from "@/lib/expensas/flujo";
 
-// El flujo de expensas (Gmail + Claude + Drive + WhatsApp) corre en after() y
-// puede tardar más de un minuto.
-export const maxDuration = 300;
-
 // Verificación del webhook que hace Meta al configurarlo.
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams;
