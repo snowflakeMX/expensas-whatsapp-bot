@@ -129,6 +129,22 @@ async function aplicarFormatos(api: Api, formatos: Formato[]): Promise<void> {
   });
 }
 
+// Deja el área sin combinar y sin formato: si antes hubo un bloque borrado a
+// mano, sus celdas combinadas taparían los valores nuevos.
+async function limpiarArea(api: Api, desde: number, hasta: number, col: number): Promise<void> {
+  const sheetId = await idPestania(api);
+  const range = { sheetId, startRowIndex: desde, endRowIndex: hasta + 1, startColumnIndex: col, endColumnIndex: col + 2 };
+  await api.spreadsheets.batchUpdate({
+    spreadsheetId: env("EXPENSAS_SHEET_ID"),
+    requestBody: {
+      requests: [
+        { unmergeCells: { range } },
+        { repeatCell: { range, cell: { userEnteredFormat: {} }, fields: "userEnteredFormat" } },
+      ],
+    },
+  });
+}
+
 async function vista(api: Api, bloque: Bloque): Promise<FilaVista[]> {
   return vistaBloque(await leer(api, "UNFORMATTED_VALUE"), bloque);
 }
@@ -152,6 +168,7 @@ export async function cargarMes(liq: Liquidacion): Promise<ResultadoPlanilla> {
   const { fila, col } = lugarNuevoBloque(grilla, ALTO_BLOQUE_NUEVO(liq));
   const escritura = armarBloque(grilla, liq, fila, col);
   await asegurarFilas(api, escritura.bloque.totalFinal + 1);
+  await limpiarArea(api, fila, escritura.bloque.totalFinal, col);
   await escribirCeldas(api, escritura.celdas);
   await aplicarFormatos(api, escritura.formatos);
   return { bloque: escritura.bloque, filas: await vista(api, escritura.bloque), yaEstaba: false };
@@ -167,6 +184,7 @@ export async function cargarDevolucion(concepto: string, monto: number): Promise
   const cambio = agregarDevolucion(grilla, bloque, concepto, monto);
   await asegurarFilas(api, cambio.bloque.totalFinal + 1);
   if (cambio.moverPagaDesde !== undefined) {
+    await limpiarArea(api, bloque.totalFinal + 1, bloque.totalFinal + 1, bloque.col);
     const sheetId = await idPestania(api);
     await api.spreadsheets.batchUpdate({
       spreadsheetId: env("EXPENSAS_SHEET_ID"),
