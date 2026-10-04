@@ -29,11 +29,23 @@ async function leer(api: Api, render: "FORMULA" | "UNFORMATTED_VALUE"): Promise<
   return (data.values ?? []) as Grilla;
 }
 
-async function idPestania(api: Api): Promise<number> {
+async function propiedadesPestania(api: Api): Promise<{ sheetId: number; filas: number }> {
   const { data } = await api.spreadsheets.get({ spreadsheetId: env("EXPENSAS_SHEET_ID"), fields: "sheets.properties" });
   const hoja = data.sheets?.find((s) => s.properties?.title === pestania());
   if (hoja?.properties?.sheetId == null) throw new Error(`No existe la pestaña "${pestania()}" en la planilla.`);
-  return hoja.properties.sheetId;
+  return { sheetId: hoja.properties.sheetId, filas: hoja.properties.gridProperties?.rowCount ?? 0 };
+}
+
+const idPestania = async (api: Api) => (await propiedadesPestania(api)).sheetId;
+
+// La API no escribe fuera de la grilla: si el bloque no entra, se agregan filas.
+async function asegurarFilas(api: Api, hasta: number): Promise<void> {
+  const { sheetId, filas } = await propiedadesPestania(api);
+  if (hasta < filas) return;
+  await api.spreadsheets.batchUpdate({
+    spreadsheetId: env("EXPENSAS_SHEET_ID"),
+    requestBody: { requests: [{ appendDimension: { sheetId, dimension: "ROWS", length: hasta - filas + 100 } }] },
+  });
 }
 
 async function escribirCeldas(api: Api, celdas: Celda[]): Promise<void> {
@@ -132,6 +144,7 @@ export async function cargarMes(liq: Liquidacion): Promise<ResultadoPlanilla> {
 
   const { fila, col } = lugarNuevoBloque(grilla, ALTO_BLOQUE_NUEVO(liq));
   const escritura = armarBloque(grilla, liq, fila, col);
+  await asegurarFilas(api, escritura.bloque.totalFinal + 1);
   await escribirCeldas(api, escritura.celdas);
   await aplicarFormatos(api, escritura.formatos);
   return { bloque: escritura.bloque, filas: await vista(api, escritura.bloque), yaEstaba: false };
@@ -145,6 +158,7 @@ export async function cargarDevolucion(concepto: string, monto: number): Promise
   if (!bloque) throw new Error("No encontré ningún mes cargado en la planilla.");
 
   const cambio = agregarDevolucion(grilla, bloque, concepto, monto);
+  await asegurarFilas(api, cambio.bloque.totalFinal + 1);
   if (cambio.moverPagaDesde !== undefined) {
     const sheetId = await idPestania(api);
     await api.spreadsheets.batchUpdate({
