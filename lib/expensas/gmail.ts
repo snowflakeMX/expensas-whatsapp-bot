@@ -16,11 +16,14 @@ function buscarPdf(parte: gmail_v1.Schema$MessagePart | undefined): gmail_v1.Sch
   return undefined;
 }
 
-// Último mail que matchea EXPENSAS_GMAIL_QUERY y trae un PDF adjunto.
-export async function buscarUltimoMailExpensas(): Promise<MailExpensas | null> {
+// PDFs adjuntos de los últimos mails que matchean EXPENSAS_GMAIL_QUERY (el más
+// nuevo primero). Se devuelven varios porque los mails reenviados pueden no
+// llegar en orden: el flujo elige el de período más reciente.
+export async function buscarMailsExpensas(cantidad = 10): Promise<MailExpensas[]> {
   const api = gmail();
-  const { data } = await api.users.messages.list({ userId: "me", q: env("EXPENSAS_GMAIL_QUERY"), maxResults: 5 });
+  const { data } = await api.users.messages.list({ userId: "me", q: env("EXPENSAS_GMAIL_QUERY"), maxResults: cantidad });
 
+  const mails: MailExpensas[] = [];
   for (const { id } of data.messages ?? []) {
     if (!id) continue;
     const { data: mensaje } = await api.users.messages.get({ userId: "me", id, format: "full" });
@@ -32,7 +35,7 @@ export async function buscarUltimoMailExpensas(): Promise<MailExpensas | null> {
       messageId: id,
       id: parte.body.attachmentId,
     });
-    return { nombrePdf: parte.filename || "expensas.pdf", pdf: Buffer.from(adjunto.data ?? "", "base64url") };
+    mails.push({ nombrePdf: parte.filename || "expensas.pdf", pdf: Buffer.from(adjunto.data ?? "", "base64url") });
   }
-  return null;
+  return mails;
 }

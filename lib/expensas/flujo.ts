@@ -1,8 +1,8 @@
 import { enviarDocumento, enviarImagen, enviarTexto, subirMedia } from "@/lib/whatsapp/enviar";
 import type { FilaVista } from "./bloque";
-import { buscarUltimoMailExpensas } from "./gmail";
+import { buscarMailsExpensas, type MailExpensas } from "./gmail";
 import { formatoPesos, imagenBloque } from "./imagen";
-import { MESES, parsearLiquidacion, repartir, textoDelPdf } from "./liquidacion";
+import { MESES, parsearLiquidacion, repartir, textoDelPdf, type Liquidacion } from "./liquidacion";
 import { cargarDevolucion, cargarMes, type ResultadoPlanilla } from "./planilla";
 
 // Orquesta "verificar expensas":
@@ -27,13 +27,23 @@ export async function verificarExpensas(waId: string, phoneNumberId?: string): P
   try {
     await texto("Recibido, estoy buscando el mail de expensas...");
 
-    const mail = await buscarUltimoMailExpensas();
-    if (!mail) {
-      await texto("No encontré ningún mail de expensas con un PDF adjunto.");
+    // De los últimos mails, el de período más reciente.
+    let elegido: { mail: MailExpensas; liq: Liquidacion } | null = null;
+    for (const mail of await buscarMailsExpensas()) {
+      let liq: Liquidacion;
+      try {
+        liq = parsearLiquidacion(await textoDelPdf(mail.pdf));
+      } catch (err) {
+        console.error(`No pude leer ${mail.nombrePdf}`, err);
+        continue;
+      }
+      if (!elegido || liq.anio * 12 + liq.mes > elegido.liq.anio * 12 + elegido.liq.mes) elegido = { mail, liq };
+    }
+    if (!elegido) {
+      await texto("No encontré ningún mail de expensas con un PDF que pueda leer.");
       return;
     }
-
-    const liq = parsearLiquidacion(await textoDelPdf(mail.pdf));
+    const { mail, liq } = elegido;
     const { avisos } = repartir(liq);
     const r = await cargarMes(liq);
 
