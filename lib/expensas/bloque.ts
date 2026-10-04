@@ -44,8 +44,19 @@ export const ref = (fila: number, col: number) => `${letra(col)}${fila + 1}`;
 
 export const tituloMes = (mes: number, anio: number) => `${MESES[mes - 1]} ${anio}`;
 
-function parsearTitulo(texto: string): { mes: number; anio: number } | null {
-  const m = /^([a-záéíóú]+)\s+(\d{4})$/i.exec(texto);
+// Los títulos de la planilla son fechas (1/9/2026) con formato "mmmm yyyy":
+// la API las devuelve como número de serie (días desde el 30/12/1899).
+const DIA_MS = 86_400_000;
+const EPOCA_SHEETS = Date.UTC(1899, 11, 30);
+
+export const serialDelMes = (mes: number, anio: number) => (Date.UTC(anio, mes - 1, 1) - EPOCA_SHEETS) / DIA_MS;
+
+function parsearTitulo(valor: unknown): { mes: number; anio: number } | null {
+  if (typeof valor === "number" && valor > 20_000 && valor < 80_000) {
+    const fecha = new Date(EPOCA_SHEETS + Math.round(valor) * DIA_MS);
+    return { mes: fecha.getUTCMonth() + 1, anio: fecha.getUTCFullYear() };
+  }
+  const m = /^([a-záéíóú]+)\s+(\d{4})$/i.exec(String(valor ?? "").trim());
   const mes = m ? MESES.indexOf(m[1].toLowerCase()) + 1 : 0;
   return m && mes ? { mes, anio: Number(m[2]) } : null;
 }
@@ -81,7 +92,7 @@ export function buscarBloques(g: Grilla): Bloque[] {
   const bloques: Bloque[] = [];
   g.forEach((_, fila) =>
     COLUMNAS_BLOQUE.forEach((col) => {
-      const titulo = parsearTitulo(celda(g, fila, col));
+      const titulo = parsearTitulo(g[fila]?.[col]);
       const bloque = titulo && leerBloque(g, fila, col, titulo.mes, titulo.anio);
       if (bloque) bloques.push(bloque);
     }),
@@ -149,7 +160,7 @@ export function armarBloque(g: Grilla, liq: Liquidacion, fila: number, col: numb
   const formatos: Formato[] = [];
   const poner = (f: number, c: number, valor: string | number) => celdas.push({ fila: f, col: c, valor });
 
-  poner(fila, col, tituloMes(liq.mes, liq.anio));
+  poner(fila, col, serialDelMes(liq.mes, liq.anio));
   formatos.push({ fila, col, ancho: 2, estilo: "titulo" });
   poner(fila + 1, col, "Estado de cuenta");
   formatos.push({ fila: fila + 1, col, ancho: 2, estilo: "encabezado" });

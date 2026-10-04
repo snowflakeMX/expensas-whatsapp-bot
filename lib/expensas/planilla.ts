@@ -61,7 +61,11 @@ function pedidosFormato(sheetId: number, formatos: Formato[]): sheets_v4.Schema$
     switch (estilo) {
       case "titulo":
         pedidos.push({ mergeCells: { range: rangoGrilla(fila, col, 2), mergeType: "MERGE_ALL" } });
-        formato(fila, col, 2, { horizontalAlignment: "CENTER", textFormat: { bold: true } });
+        formato(fila, col, 2, {
+          horizontalAlignment: "CENTER",
+          textFormat: { bold: true },
+          numberFormat: { type: "DATE", pattern: "mmmm yyyy" },
+        });
         break;
       case "encabezado":
         pedidos.push({ mergeCells: { range: rangoGrilla(fila, col, 2), mergeType: "MERGE_ALL" } });
