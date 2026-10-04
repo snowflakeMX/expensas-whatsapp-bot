@@ -10,12 +10,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.60.0",
+    "@resvg/resvg-js": "^2.6.2",
     "googleapis": "^150.0.0",
     "libphonenumber-js": "^1.13.13",
     "next": "^15.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "unpdf": "^1.8.1",
     "zod": "^3.25.0"
   },
   "devDependencies": {

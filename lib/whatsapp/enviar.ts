@@ -65,3 +65,7 @@ export async function enviarDocumento(
     phoneNumberId,
   );
 }
+
+export async function enviarImagen(waId: string, mediaId: string, phoneNumberId?: string, caption?: string): Promise<void> {
+  await enviarMensaje({ to: telefonoParaEnvio(waId), type: "image", image: { id: mediaId, caption } }, phoneNumberId);
+}

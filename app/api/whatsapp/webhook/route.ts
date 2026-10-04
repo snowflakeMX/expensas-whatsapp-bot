@@ -1,7 +1,12 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { firmaValida } from "@/lib/whatsapp/firma";
-import { verificarExpensas } from "@/lib/expensas/flujo";
+import { parsearMontoLibre, registrarDevolucion, verificarExpensas } from "@/lib/expensas/flujo";
+import { enviarTexto } from "@/lib/whatsapp/enviar";
+
+// El flujo de expensas (Gmail + planilla + WhatsApp) corre en after() y puede
+// tardar más que la respuesta a Meta.
+export const maxDuration = 120;
 
 // Verificación del webhook que hace Meta al configurarlo.
 export async function GET(req: NextRequest) {
@@ -49,10 +54,22 @@ export async function POST(req: NextRequest) {
   for (const msg of mensajes) {
     const texto = msg.text?.body?.trim().toLowerCase() ?? "";
     const esPermitido = !permitidos.length || permitidos.includes(msg.from);
-    if (esPermitido && texto.includes("verificar expensas")) {
+    if (!esPermitido) continue;
+    // Meta exige responder rápido; el trabajo pesado corre después de la respuesta.
+    if (texto.includes("verificar expensas")) {
       paraExpensas = true;
-      // Meta exige responder rápido; el trabajo pesado corre después de la respuesta.
       after(() => verificarExpensas(msg.from, phoneNumberId));
+    } else if (/^devoluci[oó]n\b/.test(texto)) {
+      paraExpensas = true;
+      // "devolución bomba 200000": el concepto es todo menos la última palabra (el monto).
+      const original = msg.text?.body?.trim() ?? "";
+      const m = /^devoluci[oó]n\s+(.+?)\s+(\$?\s*[\d.,]+)$/i.exec(original);
+      const monto = m ? parsearMontoLibre(m[2]) : null;
+      after(() =>
+        m && monto
+          ? registrarDevolucion(msg.from, m[1].trim(), monto, phoneNumberId)
+          : enviarTexto(msg.from, "Formato: devolución <concepto> <monto>. Ej: devolución bomba 200000", phoneNumberId),
+      );
     }
   }
 
