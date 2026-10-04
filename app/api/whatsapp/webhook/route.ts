@@ -1,7 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { firmaValida } from "@/lib/whatsapp/firma";
-import { parsearMontoLibre, registrarDevolucion, verificarExpensas } from "@/lib/expensas/flujo";
+import { parsearMontoLibre, registrarDevolucion, responderDevoluciones, verificarExpensas } from "@/lib/expensas/flujo";
 import { enviarTexto } from "@/lib/whatsapp/enviar";
 
 // El flujo de expensas (Gmail + planilla + WhatsApp) corre en after() y puede
@@ -48,15 +48,17 @@ export async function POST(req: NextRequest) {
   const phoneNumberId: string | undefined = value?.metadata?.phone_number_id;
   const permitidos = (process.env.WHATSAPP_ALLOWED_NUMBERS ?? "").split(",").map((n) => n.trim()).filter(Boolean);
 
-  // Sin mensajes (ej. actualizaciones de estado) o nada que matchee "verificar
-  // expensas": es tráfico del bot de fútbol, se reenvía sin tocar.
+  // Comandos de expensas: "expensas" (o "verificar expensas") y "devolución <concepto> <monto>".
+  // Lo demás es tráfico del bot de fútbol y se reenvía sin tocar, salvo que sea la
+  // respuesta a la pregunta de devoluciones ("jardinero $15000" / "no").
   let paraExpensas = false;
+  const posiblesRespuestas: MensajeEntrante[] = [];
   for (const msg of mensajes) {
     const texto = msg.text?.body?.trim().toLowerCase() ?? "";
     const esPermitido = !permitidos.length || permitidos.includes(msg.from);
-    if (!esPermitido) continue;
+    if (!esPermitido || !texto) continue;
     // Meta exige responder rápido; el trabajo pesado corre después de la respuesta.
-    if (texto.includes("verificar expensas")) {
+    if (texto === "expensas" || texto.includes("verificar expensas")) {
       paraExpensas = true;
       after(() => verificarExpensas(msg.from, phoneNumberId));
     } else if (/^devoluci[oó]n\b/.test(texto)) {
@@ -70,11 +72,19 @@ export async function POST(req: NextRequest) {
           ? registrarDevolucion(msg.from, m[1].trim(), monto, phoneNumberId)
           : enviarTexto(msg.from, "Formato: devolución <concepto> <monto>. Ej: devolución bomba 200000", phoneNumberId),
       );
+    } else {
+      posiblesRespuestas.push(msg);
     }
   }
 
   if (!paraExpensas) {
-    after(() => reenviarAFutbol(cuerpo, firma));
+    after(async () => {
+      // Si alguno contestaba la pregunta de devoluciones, no va al bot de fútbol.
+      for (const msg of posiblesRespuestas) {
+        if (await responderDevoluciones(msg.from, msg.text?.body ?? "", phoneNumberId)) return;
+      }
+      await reenviarAFutbol(cuerpo, firma);
+    });
   }
 
   return NextResponse.json({ ok: true });

@@ -135,6 +135,13 @@ async function vista(api: Api, bloque: Bloque): Promise<FilaVista[]> {
 
 export type ResultadoPlanilla = { bloque: Bloque; filas: FilaVista[]; yaEstaba: boolean };
 
+// El mes si ya está cargado en la planilla.
+export async function leerMes(mes: number, anio: number): Promise<ResultadoPlanilla | null> {
+  const api = sheets();
+  const bloque = buscarBloques(await leer(api, "FORMULA")).find((b) => b.mes === mes && b.anio === anio);
+  return bloque ? { bloque, filas: await vista(api, bloque), yaEstaba: true } : null;
+}
+
 // Carga el mes en la planilla (si ya estaba, no lo toca) y devuelve el bloque como quedó.
 export async function cargarMes(liq: Liquidacion): Promise<ResultadoPlanilla> {
   const api = sheets();
